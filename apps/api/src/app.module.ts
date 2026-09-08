@@ -3,7 +3,6 @@ import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import * as path from 'path';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -45,6 +44,5 @@ import { CidadesVagaModule } from './cidades-vaga/cidades-vaga.module';
     CidadesVagaModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
 })
 export class AppModule {}
