@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsString,
   Matches,
+  ValidateIf,
 } from 'class-validator';
 
 export class UpdateCandidatoDto {
@@ -61,6 +62,25 @@ export class UpdateCandidatoDto {
   @IsOptional()
   tipoAdmissao?: string;
 
+  @IsBoolean()
+  @IsOptional()
+  deficiente?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  preencheCotaDeficiencia?: boolean;
+
+  @IsIn([0, 1, 2, 3, 4, 5, 6, 7, 8])
+  @IsInt()
+  @IsOptional()
+  tipoAposentadoria?: number;
+
+  @ValidateIf(
+    (dto: UpdateCandidatoDto) => dto.tipoAposentadoria !== undefined && dto.tipoAposentadoria !== 0,
+  )
+  @IsDateString({}, { message: 'Informe a data de aposentadoria' })
+  dataAposentadoria?: string;
+
   // Dados pessoais adicionais
   @IsString()
   @IsNotEmpty()
@@ -71,12 +91,6 @@ export class UpdateCandidatoDto {
   @IsNotEmpty()
   @IsOptional()
   grauInstrucao?: string;
-
-  @IsString()
-  @IsNotEmpty()
-  @Matches(/^\d{11}$/, { message: 'PIS deve conter 11 dígitos' })
-  @IsOptional()
-  pis?: string;
 
   @IsInt()
   @IsOptional()

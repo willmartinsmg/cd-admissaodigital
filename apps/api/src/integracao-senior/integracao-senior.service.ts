@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { PrismaService } from '../prisma/prisma.service';
@@ -52,16 +48,21 @@ export class IntegracaoSeniorService {
     if (!requisicao.empresa) {
       throw new BadRequestException('Requisição sem empresa vinculada');
     }
+    const dataAposentadoria = candidato.dataAposentadoria;
+    if (candidato.tipoAposentadoria !== 0 && !dataAposentadoria) {
+      throw new BadRequestException('Informe a data de aposentadoria do candidato');
+    }
 
     // 3. Monta payload
-    const toInt = (v: string | null | undefined) =>
-      v ? parseInt(v.replace(/\D/g, ''), 10) : 0;
+    const toInt = (v: string | null | undefined) => (v ? parseInt(v.replace(/\D/g, ''), 10) : 0);
 
-    const toDigits = (v: string | null | undefined) =>
-      v ? v.replace(/\D/g, '') : '';
+    const toDigits = (v: string | null | undefined) => (v ? v.replace(/\D/g, '') : '');
 
     const semAcento = (v: string) =>
-      v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+      v
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toUpperCase();
 
     const tipadmMap: Record<string, number> = {
       PRIMEIRO_EMPREGO: 1,
@@ -86,6 +87,10 @@ export class IntegracaoSeniorService {
       postra: requisicao.postoTrabalho ?? '',
       datnas: formatDate(candidato.dataNascimento),
       tipadm: tipadmMap[candidato.tipoAdmissao ?? ''] ?? 2,
+      DEFFIS: candidato.deficiente ? 'S' : 'N',
+      COTDEF: candidato.preencheCotaDeficiencia ? 'S' : 'N',
+      TIPAPO: candidato.tipoAposentadoria,
+      DATAPO: dataAposentadoria ? formatDate(dataAposentadoria) : '31/12/1900',
       codesc: toInt(requisicao.escala),
       tipsex: candidato.genero ?? '',
       estciv: toInt(candidato.estadoCivil),

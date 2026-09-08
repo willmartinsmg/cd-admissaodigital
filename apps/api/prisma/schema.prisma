@@ -57,7 +57,11 @@ model Candidato {
   biometriaIdentificadorExterno String?         @map("biometria_identificador_externo")
 
   // Admissão
-  tipoAdmissao String? @map("tipo_admissao")
+  tipoAdmissao              String?   @map("tipo_admissao")
+  deficiente                Boolean   @default(false)
+  preencheCotaDeficiencia   Boolean   @default(false) @map("preenche_cota_deficiencia")
+  tipoAposentadoria         Int       @default(0) @map("tipo_aposentadoria")
+  dataAposentadoria         DateTime? @map("data_aposentadoria") @db.Date
 
   // Dados pessoais adicionais
   estadoCivil   String? @map("estado_civil")

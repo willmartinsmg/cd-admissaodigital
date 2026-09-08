@@ -112,6 +112,18 @@ const GRAUS_INSTRUCAO = [
   { cod: '13', desc: 'Ph.D.' },
 ];
 
+const TIPOS_APOSENTADORIA = [
+  { cod: '0', desc: 'Não é aposentado' },
+  { cod: '1', desc: 'Tempo de Contribuição' },
+  { cod: '2', desc: 'Tempo de Contribuição Proporcional' },
+  { cod: '3', desc: 'Idade' },
+  { cod: '4', desc: 'Invalidez' },
+  { cod: '5', desc: 'Invalidez Acidente Trabalho' },
+  { cod: '6', desc: 'Invalidez Doença Profissional' },
+  { cod: '7', desc: 'Compulsória' },
+  { cod: '8', desc: 'Especial' },
+];
+
 // ---------------------------------------------------------------------------
 // Lista de status editáveis de candidatura
 // ---------------------------------------------------------------------------
@@ -221,9 +233,12 @@ interface CandidatoData {
   possuiFilhos: boolean;
   cidadeVagaId: number;
   tipoAdmissao: string | null;
+  deficiente: boolean;
+  preencheCotaDeficiencia: boolean;
+  tipoAposentadoria: number;
+  dataAposentadoria: string | null;
   estadoCivil: string | null;
   grauInstrucao: string | null;
-  pis: string | null;
   nacionalidade: number | null;
   paisNascimento: string | null;
   estadoNascimento: string | null;
@@ -314,15 +329,14 @@ const candidatoSchema = z
 
   // Admissão
   tipoAdmissao: z.enum(['', 'PRIMEIRO_EMPREGO', 'REEMPREGO']),
+  deficiente: z.enum(['true', 'false']),
+  preencheCotaDeficiencia: z.enum(['true', 'false']),
+  tipoAposentadoria: z.enum(['0', '1', '2', '3', '4', '5', '6', '7', '8']),
+  dataAposentadoria: z.string().trim().optional(),
 
   // Dados pessoais adicionais
   estadoCivil: z.string().trim().optional(),
   grauInstrucao: z.string().trim().optional(),
-  pis: z
-    .string()
-    .trim()
-    .optional()
-    .refine((v) => !v || v.replace(/\D/g, '').length === 11, 'Informe um PIS com 11 dígitos'),
   raccor: z.string().trim().optional(),
 
   // Naturalidade
@@ -396,6 +410,14 @@ const candidatoSchema = z
       code: z.ZodIssueCode.custom,
       path: ['justificativaReprovacao'],
       message: 'Informe a justificativa',
+    });
+  }
+
+  if (values.tipoAposentadoria !== '0' && !values.dataAposentadoria) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['dataAposentadoria'],
+      message: 'Informe a data de aposentadoria',
     });
   }
 
@@ -578,9 +600,12 @@ const defaultValues: CandidatoForm = {
   justificativaReprovacao: '',
   cidadeVagaId: '',
   tipoAdmissao: '',
+  deficiente: 'false',
+  preencheCotaDeficiencia: 'false',
+  tipoAposentadoria: '0',
+  dataAposentadoria: '',
   estadoCivil: '',
   grauInstrucao: '',
-  pis: '',
   raccor: '',
   nacionalidade: '',
   paisNascimento: '',
@@ -744,9 +769,12 @@ const buildPayload = (
   justificativaReprovacao: optionalString(values.justificativaReprovacao),
   cidadeVagaId: optionalInt(values.cidadeVagaId),
   tipoAdmissao: optionalString(values.tipoAdmissao),
+  deficiente: values.deficiente === 'true',
+  preencheCotaDeficiencia: values.preencheCotaDeficiencia === 'true',
+  tipoAposentadoria: Number(values.tipoAposentadoria),
+  dataAposentadoria: values.tipoAposentadoria === '0' ? null : optionalString(values.dataAposentadoria),
   estadoCivil: optionalString(values.estadoCivil),
   grauInstrucao: optionalString(values.grauInstrucao),
-  pis: optionalDigits(values.pis),
   raccor: values.raccor ? parseInt(values.raccor) : undefined,
   nacionalidade: optionalInt(values.nacionalidade),
   paisNascimento: optionalString(values.paisNascimento),
@@ -807,13 +835,6 @@ const getPageTitle = (mode: CandidatoMode) => {
 const formatCpf = (value: string) => {
   const digits = value.replace(/\D/g, '').slice(0, 11);
   return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, (_, a, b, c, d) =>
-    d ? `${a}.${b}.${c}-${d}` : `${a}.${b}.${c}`,
-  );
-};
-
-const formatPis = (value: string) => {
-  const digits = value.replace(/\D/g, '').slice(0, 11);
-  return digits.replace(/(\d{3})(\d{5})(\d{2})(\d{0,1})/, (_, a, b, c, d) =>
     d ? `${a}.${b}.${c}-${d}` : `${a}.${b}.${c}`,
   );
 };
@@ -1210,6 +1231,7 @@ export default function CandidatoFormPage({ mode }: { mode: CandidatoMode }) {
   });
 
   const situacaoSelecionada = watch('situacao');
+  const tipoAposentadoriaSelecionado = watch('tipoAposentadoria');
   const isCandidato = situacaoSelecionada === 'CANDIDATO';
   const exigeJustificativaReprovacao =
     situacaoSelecionada === 'ELIMINADO' || situacaoSelecionada === 'DESISTENTE';
@@ -1263,6 +1285,10 @@ export default function CandidatoFormPage({ mode }: { mode: CandidatoMode }) {
   useEffect(() => {
     if (!exigeJustificativaReprovacao) setValue('justificativaReprovacao', '');
   }, [exigeJustificativaReprovacao, setValue]);
+
+  useEffect(() => {
+    if (tipoAposentadoriaSelecionado === '0') setValue('dataAposentadoria', '');
+  }, [setValue, tipoAposentadoriaSelecionado]);
 
   useEffect(() => {
     if (!dependenteIrSelecionado) setDependenteValue('cpf', '');
@@ -1522,9 +1548,16 @@ export default function CandidatoFormPage({ mode }: { mode: CandidatoMode }) {
           justificativaReprovacao: toText(data.justificativaReprovacao),
           cidadeVagaId: String(data.cidadeVagaId),
           tipoAdmissao: (data.tipoAdmissao ?? '') as CandidatoForm['tipoAdmissao'],
+          deficiente: String(data.deficiente) as CandidatoForm['deficiente'],
+          preencheCotaDeficiencia: String(
+            data.preencheCotaDeficiencia,
+          ) as CandidatoForm['preencheCotaDeficiencia'],
+          tipoAposentadoria: String(
+            data.tipoAposentadoria,
+          ) as CandidatoForm['tipoAposentadoria'],
+          dataAposentadoria: toDateInputValue(data.dataAposentadoria),
           estadoCivil: toText(data.estadoCivil),
           grauInstrucao: toText(data.grauInstrucao),
-          pis: formatPis(toText(data.pis)),
           raccor: data.raccor != null ? String(data.raccor) : '',
           nacionalidade: data.nacionalidade != null ? String(data.nacionalidade) : '',
           paisNascimento: toText(data.paisNascimento),
@@ -2427,17 +2460,30 @@ export default function CandidatoFormPage({ mode }: { mode: CandidatoMode }) {
                       <option value="DESISTENTE">Desistente</option>
                       <option value="ADMITIDO">Admitido</option>
                     </SelectField>
-                    {exigeJustificativaReprovacao && (
-                      <TextField
-                        id="justificativaReprovacao"
-                        label="Justificativa"
-                        required
-                        disabled={isViewMode}
-                        error={errors.justificativaReprovacao?.message}
-                        {...register('justificativaReprovacao')}
-                      />
-                    )}
+                    <SelectField
+                      id="tipoAdmissao"
+                      label="Tipo de admissão"
+                      required={!isCandidato}
+                      disabled={isViewMode}
+                      error={errors.tipoAdmissao?.message}
+                      {...register('tipoAdmissao')}
+                    >
+                      <option value="">Selecione</option>
+                      <option value="PRIMEIRO_EMPREGO">Primeiro emprego</option>
+                      <option value="REEMPREGO">Reemprego</option>
+                    </SelectField>
                   </div>
+
+                  {exigeJustificativaReprovacao && (
+                    <TextField
+                      id="justificativaReprovacao"
+                      label="Justificativa"
+                      required
+                      disabled={isViewMode}
+                      error={errors.justificativaReprovacao?.message}
+                      {...register('justificativaReprovacao')}
+                    />
+                  )}
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <SelectField
@@ -2470,28 +2516,56 @@ export default function CandidatoFormPage({ mode }: { mode: CandidatoMode }) {
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <SelectField
-                      id="tipoAdmissao"
-                      label="Tipo de admissão"
-                      required={!isCandidato}
+                      id="deficiente"
+                      label="Deficiente?"
+                      required
                       disabled={isViewMode}
-                      error={errors.tipoAdmissao?.message}
-                      {...register('tipoAdmissao')}
+                      error={errors.deficiente?.message}
+                      {...register('deficiente')}
                     >
-                      <option value="">Selecione</option>
-                      <option value="PRIMEIRO_EMPREGO">Primeiro emprego</option>
-                      <option value="REEMPREGO">Reemprego</option>
+                      <option value="false">Não</option>
+                      <option value="true">Sim</option>
+                    </SelectField>
+                    <SelectField
+                      id="preencheCotaDeficiencia"
+                      label="Preenche Cota Deficiência"
+                      required
+                      disabled={isViewMode}
+                      error={errors.preencheCotaDeficiencia?.message}
+                      {...register('preencheCotaDeficiencia')}
+                    >
+                      <option value="false">Não</option>
+                      <option value="true">Sim</option>
+                    </SelectField>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <SelectField
+                      id="tipoAposentadoria"
+                      label="Tipo de aposentadoria"
+                      required
+                      disabled={isViewMode}
+                      error={errors.tipoAposentadoria?.message}
+                      {...register('tipoAposentadoria')}
+                    >
+                      {TIPOS_APOSENTADORIA.map((tipo) => (
+                        <option key={tipo.cod} value={tipo.cod}>
+                          {tipo.cod} - {tipo.desc}
+                        </option>
+                      ))}
                     </SelectField>
 
-                    <MaskedTextField
-                      id="pis"
-                      label="PIS"
-                      control={control}
-                      name="pis"
-                      mask={formatPis}
-                      disabled={isViewMode}
-                      placeholder="000.00000.00-0"
-                      error={errors.pis?.message}
-                    />
+                    {tipoAposentadoriaSelecionado !== '0' && (
+                      <TextField
+                        id="dataAposentadoria"
+                        label="Data aposentadoria"
+                        required
+                        type="date"
+                        disabled={isViewMode}
+                        error={errors.dataAposentadoria?.message}
+                        {...register('dataAposentadoria')}
+                      />
+                    )}
                   </div>
 
                 </CardContent>

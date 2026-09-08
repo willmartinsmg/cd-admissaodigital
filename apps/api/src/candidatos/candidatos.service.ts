@@ -174,11 +174,14 @@ const buildCandidatoData = (dto: CreateCandidatoDto | UpdateCandidatoDto) => ({
 
   // Admissão
   tipoAdmissao: cleanNullableString(dto.tipoAdmissao),
+  deficiente: dto.deficiente,
+  preencheCotaDeficiencia: dto.preencheCotaDeficiencia,
+  tipoAposentadoria: dto.tipoAposentadoria,
+  dataAposentadoria: cleanDate(dto.dataAposentadoria),
 
   // Dados pessoais adicionais
   estadoCivil: cleanNullableString(dto.estadoCivil),
   grauInstrucao: cleanNullableString(dto.grauInstrucao),
-  pis: normalizeNullableDigits(dto.pis),
   raccor: dto.raccor,
 
   // Naturalidade
