@@ -1,5 +1,6 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { PublicWhatsAppContact } from '@/components/public/PublicWhatsAppContact';
 // Auth
 import LoginPage from '@/pages/auth/LoginPage';
 import SignupPage from '@/pages/auth/SignupPage';
@@ -115,6 +116,15 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function PublicContactLayout() {
+  return (
+    <>
+      <Outlet />
+      <PublicWhatsAppContact />
+    </>
+  );
+}
+
 export default function Router() {
   return (
     <Routes>
@@ -163,8 +173,16 @@ export default function Router() {
         />
       </Route>
       <Route path="/empresa-obrigatoria" element={<CompanyRequiredRoute />} />
-      <Route path="/" element={<VagasPage />} />
-      <Route path="/candidatar" element={<CandidaturaPage />} />
+      <Route element={<PublicContactLayout />}>
+        <Route path="/" element={<VagasPage />} />
+        <Route path="/candidatar" element={<CandidaturaPage />} />
+        <Route path="/candidato/documentos/:portalAccessToken" element={<CandidatoPortalPage />} />
+        <Route
+          path="/responsavel/assinaturas/:accessToken"
+          element={<ResponsavelAssinaturasPage />}
+        />
+        <Route path="/verificar/:codigo?" element={<VerificacaoPage />} />
+      </Route>
       <Route element={<AdminLayoutRoute />}>
         <Route path="/painel" element={<HomePage />} />
         <Route path="/requisicoes" element={<RequisicoesPage />} />
@@ -206,9 +224,6 @@ export default function Router() {
           element={<Navigate to="/candidato-assinaturas" replace />}
         />
       </Route>
-      <Route path="/candidato/documentos/:portalAccessToken" element={<CandidatoPortalPage />} />
-      <Route path="/responsavel/assinaturas/:accessToken" element={<ResponsavelAssinaturasPage />} />
-      <Route path="/verificar/:codigo?" element={<VerificacaoPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

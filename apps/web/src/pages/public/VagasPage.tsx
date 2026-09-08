@@ -9,6 +9,7 @@ import {
   Phone,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { PublicWhatsAppCta } from '@/components/public/PublicWhatsAppContact';
 
 const BRAND_YELLOW = '#f5c400';
 
@@ -263,6 +264,9 @@ function Footer() {
             <li className="flex gap-2">
               <Phone className="h-4 w-4 shrink-0 text-yellow-300" />
               (33) 3279-6131
+            </li>
+            <li>
+              <PublicWhatsAppCta />
             </li>
             <li className="flex gap-2">
               <Mail className="h-4 w-4 shrink-0 text-yellow-300" />
