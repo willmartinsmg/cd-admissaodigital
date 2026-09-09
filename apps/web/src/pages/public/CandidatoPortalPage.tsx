@@ -1,6 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle2, Download, ExternalLink, Eye, FileSignature, KeyRound, Loader2, Mail, PenLine, Phone, ShieldCheck, X } from 'lucide-react';
+import {
+  CheckCircle2,
+  Download,
+  ExternalLink,
+  Eye,
+  FileSignature,
+  KeyRound,
+  Loader2,
+  Mail,
+  PenLine,
+  ShieldCheck,
+  X,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import api from '@/lib/api';
 import {
@@ -24,15 +36,23 @@ interface PortalSummary {
 const storageKey = (token: string) => `portal-session-${token}`;
 
 function saveSession(portalToken: string, sessionToken: string) {
-  try { sessionStorage.setItem(storageKey(portalToken), sessionToken); } catch {}
+  try {
+    sessionStorage.setItem(storageKey(portalToken), sessionToken);
+  } catch {}
 }
 
 function loadSession(portalToken: string): string | null {
-  try { return sessionStorage.getItem(storageKey(portalToken)); } catch { return null; }
+  try {
+    return sessionStorage.getItem(storageKey(portalToken));
+  } catch {
+    return null;
+  }
 }
 
 function clearSession(portalToken: string) {
-  try { sessionStorage.removeItem(storageKey(portalToken)); } catch {}
+  try {
+    sessionStorage.removeItem(storageKey(portalToken));
+  } catch {}
 }
 
 export default function CandidatoPortalPage() {
@@ -42,6 +62,9 @@ export default function CandidatoPortalPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [messageIsError, setMessageIsError] = useState(false);
+  const [otpChoiceOpen, setOtpChoiceOpen] = useState(false);
+  const [sendOptionsOpen, setSendOptionsOpen] = useState(false);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [signingId, setSigningId] = useState<number | null>(null);
   const [previewState, setPreviewState] = useState<{
@@ -83,6 +106,7 @@ export default function CandidatoPortalPage() {
         // Sessão expirada
         updateSessionToken(null);
         setEnvelopes([]);
+        setMessageIsError(true);
         setMessage('Sua sessão expirou. Solicite um novo código para continuar.');
       }
       return null;
@@ -124,34 +148,59 @@ export default function CandidatoPortalPage() {
     })();
   }, [portalAccessToken]);
 
-  const totalDocs = sessionToken && envelopes.length > 0
-    ? envelopes.reduce((sum, env) => sum + env.documentos.length, 0)
-    : summary?.totalDocumentos ?? 0;
-  const signedDocs = sessionToken && envelopes.length > 0
-    ? envelopes.reduce((sum, env) => sum + env.documentos.filter((d) => d.status === 'ASSINADO').length, 0)
-    : summary?.documentosAssinados ?? 0;
+  const totalDocs =
+    sessionToken && envelopes.length > 0
+      ? envelopes.reduce((sum, env) => sum + env.documentos.length, 0)
+      : (summary?.totalDocumentos ?? 0);
+  const signedDocs =
+    sessionToken && envelopes.length > 0
+      ? envelopes.reduce(
+          (sum, env) => sum + env.documentos.filter((d) => d.status === 'ASSINADO').length,
+          0,
+        )
+      : (summary?.documentosAssinados ?? 0);
 
   const sendOtp = async (channel: 'email' | 'sms') => {
+    setOtpChoiceOpen(false);
+    setSendOptionsOpen(false);
     setMessage('');
+    setMessageIsError(false);
     setOtpState({ code: '', message: 'Enviando código...', submitting: true });
     try {
       const { data: resp } = await api.post<{ identifier: string }>(`${basePath}/otp`, { channel });
-      setOtpState({ code: '', message: `Código enviado para ${resp.identifier}.`, submitting: false });
+      setOtpState({
+        code: '',
+        message: `Código enviado para ${resp.identifier}.`,
+        submitting: false,
+      });
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setOtpState(null);
-      setMessage(msg ?? 'Não foi possível enviar o código.');
+      setMessageIsError(true);
+      setMessage(
+        channel === 'sms'
+          ? 'Não foi possível enviar o código por SMS. Tente enviar por e-mail.'
+          : (msg ?? 'Não foi possível enviar o código por e-mail.'),
+      );
     }
+  };
+
+  const enterExistingCode = () => {
+    setOtpChoiceOpen(false);
+    setSendOptionsOpen(false);
+    setMessage('');
+    setMessageIsError(false);
+    setOtpState({ code: '', message: 'Informe o código de acesso recebido.', submitting: false });
   };
 
   const verifyOtp = async () => {
     if (!otpState) return;
+    setMessageIsError(false);
     setOtpState({ ...otpState, submitting: true });
     try {
-      const { data: resp } = await api.post<{ sessionToken: string }>(
-        `${basePath}/otp/verify`,
-        { code: otpState.code },
-      );
+      const { data: resp } = await api.post<{ sessionToken: string }>(`${basePath}/otp/verify`, {
+        code: otpState.code,
+      });
       updateSessionToken(resp.sessionToken);
       setOtpState(null);
       setMessage('Sessão de assinatura liberada por 30 minutos.');
@@ -164,26 +213,31 @@ export default function CandidatoPortalPage() {
 
   const signDocumento = async (envelope: EnvelopeAssinatura, doc: DocumentoAssinatura) => {
     if (!sessionToken) {
+      setMessageIsError(true);
       setMessage('Valide o código de acesso para assinar.');
       return;
     }
 
     setSigningId(doc.id);
     setMessage('');
+    setMessageIsError(false);
     try {
       await api.post(`${basePath}/documentos/${doc.id}/assinar`, { sessionToken });
       await refreshData();
       setPreviewState(null);
       setMessage(`Documento "${doc.nome}" assinado com sucesso.`);
     } catch (err: unknown) {
-      const response = (err as { response?: { status?: number; data?: { message?: string } } })?.response;
+      const response = (err as { response?: { status?: number; data?: { message?: string } } })
+        ?.response;
       if (response?.status === 403) {
         updateSessionToken(null);
         setEnvelopes([]);
         setPreviewState(null);
+        setMessageIsError(true);
         setMessage('Sua sessão expirou. Solicite um novo código para continuar.');
         return;
       }
+      setMessageIsError(true);
       setMessage(response?.data?.message ?? 'Não foi possível assinar. Tente novamente.');
     } finally {
       setSigningId(null);
@@ -243,106 +297,174 @@ export default function CandidatoPortalPage() {
             </div>
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <div className="rounded-2xl border bg-background/70 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Documentos assinados</p>
-                <p className="mt-1 text-2xl font-semibold">{signedDocs}/{totalDocs}</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Documentos assinados
+                </p>
+                <p className="mt-1 text-2xl font-semibold">
+                  {signedDocs}/{totalDocs}
+                </p>
               </div>
               <div className="rounded-2xl border bg-background/70 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Status
+                </p>
                 <p className="mt-1 text-2xl font-semibold">
-                  {allComplete ? 'Concluído' : `${Math.round((signedDocs / Math.max(totalDocs, 1)) * 100)}%`}
+                  {allComplete
+                    ? 'Concluído'
+                    : `${Math.round((signedDocs / Math.max(totalDocs, 1)) * 100)}%`}
                 </p>
               </div>
             </div>
           </div>
         </section>
 
-        {message && <p className="rounded-xl border bg-card px-4 py-3 text-sm text-primary">{message}</p>}
+        {message && (
+          <p
+            className={`rounded-xl border px-4 py-3 text-sm ${
+              messageIsError
+                ? 'border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300'
+                : 'bg-card text-primary'
+            }`}
+            role={messageIsError ? 'alert' : 'status'}
+          >
+            {message}
+          </p>
+        )}
 
-        {/* OTP Channel Selection — always shown when not authenticated */}
+        {/* OTP access — always shown when not authenticated */}
         {!authenticated && (
           <div className="rounded-2xl border bg-card p-6 shadow-sm text-center">
             <KeyRound className="mx-auto h-8 w-8 text-blue-600" />
             <h2 className="mt-3 text-lg font-semibold">Validar código de acesso</h2>
             <p className="mt-2 text-sm text-muted-foreground">
               {allComplete
-                ? 'Para visualizar seus documentos, valide seu código de acesso:'
-                : 'Escolha como deseja receber o código de verificação:'}
+                ? 'Para visualizar seus documentos, informe ou solicite um código de acesso.'
+                : 'Informe um código que já recebeu ou solicite um novo código de acesso.'}
             </p>
-            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
-              {summary.canaisDisponiveis.email && (
-                <Button type="button" onClick={() => sendOtp('email')} disabled={otpState?.submitting}>
-                  <Mail className="h-4 w-4" /> E-mail ({summary.canaisDisponiveis.email})
+            {!otpChoiceOpen ? (
+              <Button type="button" className="mt-4" onClick={() => setOtpChoiceOpen(true)}>
+                <KeyRound className="h-4 w-4" /> Continuar
+              </Button>
+            ) : (
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
+                <Button type="button" onClick={enterExistingCode}>
+                  Informar código recebido
                 </Button>
-              )}
-              {summary.canaisDisponiveis.sms && (
-                <Button type="button" variant="outline" onClick={() => sendOtp('sms')} disabled={otpState?.submitting}>
-                  <Phone className="h-4 w-4" /> SMS ({summary.canaisDisponiveis.sms})
+                <Button type="button" variant="outline" onClick={() => setSendOptionsOpen(true)}>
+                  Enviar novo código
                 </Button>
-              )}
-            </div>
+              </div>
+            )}
+            {otpChoiceOpen && sendOptionsOpen && (
+              <div className="mt-5 border-t border-border pt-5 text-left">
+                <p className="text-sm font-semibold text-foreground">
+                  Onde você quer receber o código?
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Escolha uma opção abaixo. Enviaremos um novo código para o contato cadastrado.
+                </p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {summary.canaisDisponiveis.email && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-auto min-h-16 justify-start px-4 py-3 text-left"
+                      onClick={() => sendOtp('email')}
+                      disabled={otpState?.submitting}
+                    >
+                      <Mail className="h-5 w-5 shrink-0 text-blue-600" />
+                      <span className="min-w-0">
+                        <span className="block font-semibold">E-mail</span>
+                        <span className="block truncate text-xs font-normal text-muted-foreground">
+                          {summary.canaisDisponiveis.email}
+                        </span>
+                      </span>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* Document List — only shown when authenticated */}
-        {authenticated && envelopes.map((envelope) => (
-          <section key={envelope.id} className="rounded-2xl border bg-card p-4 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
-              <div>
-                <h2 className="text-xl font-semibold">
-                  {envelope.setor === 'ADM_PESSOAL' ? 'Adm Pessoal' : 'SESMT'}
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  {envelope.documentos.filter((d) => d.status === 'ASSINADO').length}/{envelope.documentos.length} assinados
-                </p>
+        {authenticated &&
+          envelopes.map((envelope) => (
+            <section key={envelope.id} className="rounded-2xl border bg-card p-4 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
+                <div>
+                  <h2 className="text-xl font-semibold">
+                    {envelope.setor === 'ADM_PESSOAL' ? 'Adm Pessoal' : 'SESMT'}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    {envelope.documentos.filter((d) => d.status === 'ASSINADO').length}/
+                    {envelope.documentos.length} assinados
+                  </p>
+                </div>
+                {envelope.status === 'CONCLUIDO' && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                    <ShieldCheck className="h-3.5 w-3.5" /> Concluído
+                  </span>
+                )}
               </div>
-              {envelope.status === 'CONCLUIDO' && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
-                  <ShieldCheck className="h-3.5 w-3.5" /> Concluído
-                </span>
-              )}
-            </div>
 
-            <div className="mt-4 space-y-3">
-              {envelope.documentos.map((doc) => (
-                <div key={doc.id} className="grid gap-3 rounded-xl border bg-background p-4 lg:grid-cols-[1fr_auto] lg:items-center">
-                  <div className="min-w-0">
+              <div className="mt-4 space-y-3">
+                {envelope.documentos.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="grid gap-3 rounded-xl border bg-background p-4 lg:grid-cols-[1fr_auto] lg:items-center"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold leading-snug">{doc.nome}</p>
+                        {doc.status === 'ASSINADO' && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                            <CheckCircle2 className="h-3 w-3" /> Assinado
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 truncate text-xs text-muted-foreground">
+                        Hash: {doc.hashAssinado ?? doc.hashOriginal}
+                      </p>
+                    </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-semibold leading-snug">{doc.nome}</p>
+                      {doc.status !== 'ASSINADO' && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="text-white hover:text-white"
+                          disabled={signingId === doc.id}
+                          onClick={() => setPreviewState({ envelope, doc })}
+                        >
+                          {signingId === doc.id ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Assinando...
+                            </>
+                          ) : (
+                            <>
+                              <PenLine className="h-4 w-4" />
+                              Assinar
+                            </>
+                          )}
+                        </Button>
+                      )}
                       {doc.status === 'ASSINADO' && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="h-3 w-3" /> Assinado
-                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setPreviewState({ envelope, doc })}
+                        >
+                          <Eye className="h-4 w-4" /> Visualizar PDF
+                        </Button>
                       )}
                     </div>
-                    <p className="mt-1 truncate text-xs text-muted-foreground">Hash: {doc.hashAssinado ?? doc.hashOriginal}</p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {doc.status !== 'ASSINADO' && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="text-white hover:text-white"
-                        disabled={signingId === doc.id}
-                        onClick={() => setPreviewState({ envelope, doc })}
-                      >
-                        {signingId === doc.id ? (
-                          <><Loader2 className="h-4 w-4 animate-spin" />Assinando...</>
-                        ) : (
-                          <><PenLine className="h-4 w-4" />Assinar</>
-                        )}
-                      </Button>
-                    )}
-                    {doc.status === 'ASSINADO' && (
-                      <Button type="button" size="sm" variant="outline" onClick={() => setPreviewState({ envelope, doc })}>
-                        <Eye className="h-4 w-4" /> Visualizar PDF
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        ))}
+                ))}
+              </div>
+            </section>
+          ))}
       </div>
 
       {/* PDF Preview / Sign Modal */}
@@ -379,11 +501,24 @@ export default function CandidatoPortalPage() {
                 inputMode="numeric"
                 placeholder="000000"
                 value={otpState.code}
-                onChange={(e) => setOtpState({ ...otpState, code: e.target.value.replace(/\D/g, '') })}
+                onChange={(e) =>
+                  setOtpState({ ...otpState, code: e.target.value.replace(/\D/g, '') })
+                }
                 disabled={otpState.submitting}
               />
               <div className="flex gap-2">
-                <Button type="button" variant="outline" className="flex-1" disabled={otpState.submitting} onClick={() => setOtpState(null)}>Cancelar</Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  disabled={otpState.submitting}
+                  onClick={() => {
+                    setOtpState(null);
+                    setOtpChoiceOpen(false);
+                  }}
+                >
+                  Cancelar
+                </Button>
                 <Button
                   type="button"
                   className="flex-1"
@@ -429,15 +564,15 @@ function PortalPreviewModal({
     setPdfUrl(null);
 
     api
-      .get<Blob>(
-        `/documentos/portal/${portalAccessToken}/documentos/${doc.id}/view`,
-        { responseType: 'blob' },
-      )
+      .get<Blob>(`/documentos/portal/${portalAccessToken}/documentos/${doc.id}/view`, {
+        responseType: 'blob',
+      })
       .then((response) => {
         if (cancelled) return;
-        const blob = response.data.type === 'application/pdf'
-          ? response.data
-          : new Blob([response.data], { type: 'application/pdf' });
+        const blob =
+          response.data.type === 'application/pdf'
+            ? response.data
+            : new Blob([response.data], { type: 'application/pdf' });
         objectUrl = URL.createObjectURL(blob);
         setPdfUrl(objectUrl);
         setPdfLoaded(true);
@@ -461,12 +596,21 @@ function PortalPreviewModal({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Button variant="outline" size="sm" asChild>
-            <a href={pdfUrl ?? directUrl} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />Abrir</a>
+            <a href={pdfUrl ?? directUrl} target="_blank" rel="noreferrer">
+              <ExternalLink className="h-4 w-4" />
+              Abrir
+            </a>
           </Button>
           <Button variant="outline" size="sm" asChild>
-            <a href={pdfUrl ?? directUrl} download={`documento-${doc.id}.pdf`}><Download className="h-4 w-4" />Baixar PDF</a>
+            <a href={pdfUrl ?? directUrl} download={`documento-${doc.id}.pdf`}>
+              <Download className="h-4 w-4" />
+              Baixar PDF
+            </a>
           </Button>
-          <Button variant="outline" size="sm" onClick={onClose}><X className="h-4 w-4" />Fechar</Button>
+          <Button variant="outline" size="sm" onClick={onClose}>
+            <X className="h-4 w-4" />
+            Fechar
+          </Button>
         </div>
       </div>
       <div className="min-h-0 flex-1 bg-muted/30">
@@ -481,7 +625,9 @@ function PortalPreviewModal({
             <FileSignature className="h-10 w-10 opacity-40" />
             <p>{pdfError}</p>
             <Button type="button" variant="outline" asChild>
-              <a href={directUrl} target="_blank" rel="noreferrer">Abrir em nova aba</a>
+              <a href={directUrl} target="_blank" rel="noreferrer">
+                Abrir em nova aba
+              </a>
             </Button>
           </div>
         )}
@@ -519,7 +665,11 @@ function PortalPreviewModal({
           </Button>
         ) : (
           <Button type="button" disabled={!pdfLoaded || isSigning} onClick={onSign}>
-            {isSigning ? <Loader2 className="h-4 w-4 animate-spin" /> : <PenLine className="h-4 w-4" />}
+            {isSigning ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <PenLine className="h-4 w-4" />
+            )}
             Assinar documento
           </Button>
         )}

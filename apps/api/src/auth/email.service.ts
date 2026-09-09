@@ -112,6 +112,7 @@ export class EmailService {
     empresaNome: string,
     signingLink: string,
   ): Promise<void> {
+    const browserLink = this.createBrowserOpenLink(signingLink);
     await this.transporter.sendMail({
       from: this.config.get<string>('SMTP_FROM'),
       to: email,
@@ -122,12 +123,12 @@ export class EmailService {
         `Seus documentos de admissão na ${empresaNome} foram gerados e estão prontos para assinatura.`,
         '',
         'Acesse o link abaixo para visualizar e assinar seus documentos:',
-        signingLink,
+        browserLink,
       ].join('\n'),
       html: this.renderEmail({
         title: 'Documentos prontos para assinatura',
         body: `Olá, ${candidatoNome}.\n\nSeus documentos de admissão na ${empresaNome} foram gerados e estão prontos para assinatura.`,
-        action: { label: 'Assinar documentos', url: signingLink },
+        action: { label: 'Assinar documentos', url: browserLink },
         note: 'Este link é pessoal e intransferível.',
       }),
     });
@@ -142,6 +143,7 @@ export class EmailService {
   ): Promise<void> {
     const baseUrl = process.env.FRONTEND_URL ?? 'http://localhost:5010';
     const link = `${baseUrl}/responsavel/assinaturas/${accessToken}`;
+    const browserLink = this.createBrowserOpenLink(link);
 
     await this.transporter.sendMail({
       from: this.config.get<string>('SMTP_FROM'),
@@ -153,12 +155,12 @@ export class EmailService {
         `Os documentos de admissão de ${candidatoNome} estão aguardando sua assinatura como responsável legal.`,
         '',
         `Acesse o link abaixo para visualizar e assinar os documentos:`,
-        link,
+        browserLink,
       ].join('\n'),
       html: this.renderEmail({
         title: 'Assinatura de responsável legal',
         body: `Olá, ${responsavelNome}.\n\nOs documentos de admissão de ${candidatoNome} estão aguardando sua assinatura como responsável legal.`,
-        action: { label: 'Assinar documentos', url: link },
+        action: { label: 'Assinar documentos', url: browserLink },
         note: 'Este link é pessoal e intransferível.',
       }),
     });
@@ -215,6 +217,21 @@ export class EmailService {
       : '';
 
     return `<!doctype html><html lang="pt-BR"><body style="margin: 0; padding: 0; background-color: #f8f7f2; color: #111111; font-family: Inter, Arial, sans-serif;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #f8f7f2;"><tr><td align="center" style="padding: 40px 16px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 560px; background-color: #ffffff; border: 1px solid #dedbd0; border-radius: 12px;"><tr><td style="padding: 28px 32px 24px; background-color: #111111; border-radius: 11px 11px 0 0;"><p style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.3px; color: #ffffff;">Admissão Digital</p><p style="margin: 4px 0 0; font-size: 13px; line-height: 18px; color: #f5c400;">Supermercado Coelho Diniz</p></td></tr><tr><td style="padding: 32px;"><h1 style="margin: 0 0 16px; font-size: 28px; font-weight: 600; line-height: 34px; letter-spacing: -0.5px; color: #111111;">${this.escapeHtml(content.title)}</h1><p style="margin: 0; font-size: 16px; line-height: 24px; color: #626260; white-space: pre-line;">${this.escapeHtml(content.body)}</p>${code}${action}</td></tr>${note}</table></td></tr></table></body></html>`;
+  }
+
+  private createBrowserOpenLink(destination: string): string {
+    const destinationUrl = new URL(destination);
+    const candidateMatch = destinationUrl.pathname.match(/^\/candidato\/documentos\/([^/]+)$/);
+    if (candidateMatch) {
+      return `${destinationUrl.origin}/abrir-documentos/candidato/${encodeURIComponent(candidateMatch[1])}`;
+    }
+
+    const guardianMatch = destinationUrl.pathname.match(/^\/responsavel\/assinaturas\/([^/]+)$/);
+    if (guardianMatch) {
+      return `${destinationUrl.origin}/abrir-documentos/responsavel/${encodeURIComponent(guardianMatch[1])}`;
+    }
+
+    return destination;
   }
 
   private escapeHtml(value: string): string {

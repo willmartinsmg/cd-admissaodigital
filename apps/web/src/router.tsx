@@ -33,6 +33,7 @@ import VagasPage from '@/pages/public/VagasPage';
 import CandidaturaPage from '@/pages/public/CandidaturaPage';
 import CandidatoPortalPage from '@/pages/public/CandidatoPortalPage';
 import ResponsavelAssinaturasPage from '@/pages/public/ResponsavelAssinaturasPage';
+import AbrirDocumentosPage from '@/pages/public/AbrirDocumentosPage';
 import VerificacaoPage from '@/pages/verificacao/VerificacaoPage';
 import AdminLayout from '@/layouts/AdminLayout';
 import CandidateLayout from '@/layouts/CandidateLayout';
@@ -181,6 +182,7 @@ export default function Router() {
           path="/responsavel/assinaturas/:accessToken"
           element={<ResponsavelAssinaturasPage />}
         />
+        <Route path="/abrir-documentos/:tipo/:token" element={<AbrirDocumentosPage />} />
         <Route path="/verificar/:codigo?" element={<VerificacaoPage />} />
       </Route>
       <Route element={<AdminLayoutRoute />}>
